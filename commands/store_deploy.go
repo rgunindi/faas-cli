@@ -142,6 +142,7 @@ func runStoreDeploy(cmd *cobra.Command, args []string) error {
 	statusCode, err := deployImage(context.Background(),
 		proxyClient,
 		imageName,
+		imagePullPolicy,
 		item.Fprocess,
 		itemName,
 		"",

@@ -22,6 +22,9 @@ type Function struct {
 	// Image Docker image name
 	Image string `yaml:"image"`
 
+	// ImagePullPolicy is the policy which controls if the container image
+	ImagePullPolicy string `yaml:"imagePullPolicy,omitempty"`
+
 	FProcess string `yaml:"fprocess"`
 
 	Environment map[string]string `yaml:"environment"`

@@ -17,6 +17,8 @@ type Spec struct {
 	Name string `yaml:"name"`
 	//Image docker image name of the function
 	Image string `yaml:"image"`
+	//ImagePullPolicy image pull policy of the function
+	ImagePullPolicy string `yaml:"imagePullPolicy,omitempty"`
 
 	Environment map[string]string `yaml:"environment,omitempty"`
 

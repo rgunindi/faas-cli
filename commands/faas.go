@@ -41,6 +41,7 @@ var (
 	image        string
 	imagePrefix  string
 	language     string
+	imagePullPolicy string
 	tlsInsecure  bool
 )
 

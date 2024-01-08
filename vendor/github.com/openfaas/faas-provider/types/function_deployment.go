@@ -9,6 +9,9 @@ type FunctionDeployment struct {
 	// Image is a fully-qualified container image
 	Image string `json:"image"`
 
+	// ImagePullPolicy is the policy which controls if the container image
+	ImagePullPolicy string `json:"imagePullPolicy,omitempty"`
+
 	// Namespace for the function, if supported by the faas-provider
 	Namespace string `json:"namespace,omitempty"`
 

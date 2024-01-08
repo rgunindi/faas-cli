@@ -33,6 +33,7 @@ type DeployFunctionSpec struct {
 	FProcess                string
 	FunctionName            string
 	Image                   string
+	ImagePullPolicy         string
 	RegistryAuth            string
 	Language                string
 	Replace                 bool
@@ -94,6 +95,7 @@ func (c *Client) deploy(context context.Context, spec *DeployFunctionSpec, updat
 	req := types.FunctionDeployment{
 		EnvProcess:             fprocessTemplate,
 		Image:                  spec.Image,
+		ImagePullPolicy:        spec.ImagePullPolicy,
 		Service:                spec.FunctionName,
 		EnvVars:                spec.EnvVars,
 		Constraints:            spec.Constraints,

@@ -71,6 +71,7 @@ func init() {
 	deployCmd.Flags().BoolVar(&tlsInsecure, "tls-no-verify", false, "Disable TLS validation")
 	deployCmd.Flags().BoolVar(&envsubst, "envsubst", true, "Substitute environment variables in stack.yml file")
 	deployCmd.Flags().StringVarP(&token, "token", "k", "", "Pass a JWT token to use instead of basic auth")
+	deployCmd.Flags().StringVar(&imagePullPolicy, "image-pull-policy", "", "Supply the image pull policy for the function")
 	// Set bash-completion.
 	_ = deployCmd.Flags().SetAnnotation("handler", cobra.BashCompSubdirsInDir, []string{})
 	deployCmd.Flags().BoolVar(&readTemplate, "read-template", true, "Read the function's template")
@@ -106,7 +107,8 @@ var deployCmd = &cobra.Command{
 				  [--secret "SECRET_NAME"]
 				  [--tag <sha|branch|describe>]
 				  [--readonly=false]
-				  [--tls-no-verify]`,
+				  [--tls-no-verify]
+				  [--image-pull-policy <always|never|ifnotpresent>]`,
 
 	Short: "Deploy OpenFaaS functions",
 	Long: `Deploys OpenFaaS function containers either via the supplied YAML config using
@@ -260,6 +262,10 @@ Error: %s`, fprocessErr.Error())
 
 			function.Image = schema.BuildImageName(tagMode, function.Image, sha, branch)
 
+			//Check if there is a imagePullPolicy flag passed, if so, override the imagePullPolicy value
+			// defined in the stack.yaml
+			function.ImagePullPolicy = getImagePullPolicy(imagePullPolicy, function.ImagePullPolicy)	
+
 			if deployFlags.readOnlyRootFilesystem {
 				function.ReadOnlyRootFilesystem = deployFlags.readOnlyRootFilesystem
 			}
@@ -268,6 +274,7 @@ Error: %s`, fprocessErr.Error())
 				FProcess:                function.FProcess,
 				FunctionName:            function.Name,
 				Image:                   function.Image,
+				ImagePullPolicy:         function.ImagePullPolicy,
 				Language:                function.Language,
 				Replace:                 deployFlags.replace,
 				EnvVars:                 allEnvironment,
@@ -312,6 +319,7 @@ Error: %s`, fprocessErr.Error())
 		statusCode, err := deployImage(ctx,
 			proxyClient,
 			image,
+			imagePullPolicy,
 			fprocess,
 			functionName,
 			"",
@@ -345,6 +353,7 @@ func deployImage(
 	ctx context.Context,
 	client *proxy.Client,
 	image string,
+	imagePullPolicy string,
 	fprocess string,
 	functionName string,
 	registryAuth string,
@@ -382,6 +391,7 @@ func deployImage(
 		FProcess:                fprocess,
 		FunctionName:            functionName,
 		Image:                   image,
+		ImagePullPolicy:         imagePullPolicy,
 		Language:                language,
 		Replace:                 deployFlags.replace,
 		EnvVars:                 envvars,

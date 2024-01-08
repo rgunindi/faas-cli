@@ -73,3 +73,11 @@ func getNamespace(flagNamespace, stackNamespace string) string {
 	return defaultFunctionNamespace
 
 }
+
+func getImagePullPolicy(flagPullPolicy, stackPullPolicy string) string {
+	if len(flagPullPolicy) > 0 {
+		return flagPullPolicy
+	}
+
+	return stackPullPolicy
+}
