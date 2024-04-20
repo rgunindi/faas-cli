@@ -1,0 +1,180 @@
+diff --git a/commands/deploy.go b/commands/deploy.go
+index 10baf2e4..c65dcbfa 100644
+--- a/commands/deploy.go
++++ b/commands/deploy.go
+@@ -71,6 +71,7 @@ func init() {
+ 	deployCmd.Flags().BoolVar(&tlsInsecure, "tls-no-verify", false, "Disable TLS validation")
+ 	deployCmd.Flags().BoolVar(&envsubst, "envsubst", true, "Substitute environment variables in stack.yml file")
+ 	deployCmd.Flags().StringVarP(&token, "token", "k", "", "Pass a JWT token to use instead of basic auth")
++	deployCmd.Flags().StringVar(&imagePullPolicy, "image-pull-policy", "", "Supply the image pull policy for the function")
+ 	// Set bash-completion.
+ 	_ = deployCmd.Flags().SetAnnotation("handler", cobra.BashCompSubdirsInDir, []string{})
+ 	deployCmd.Flags().BoolVar(&readTemplate, "read-template", true, "Read the function's template")
+@@ -106,7 +107,8 @@ var deployCmd = &cobra.Command{
+ 				  [--secret "SECRET_NAME"]
+ 				  [--tag <sha|branch|describe>]
+ 				  [--readonly=false]
+-				  [--tls-no-verify]`,
++				  [--tls-no-verify]
++				  [--image-pull-policy <always|never|ifnotpresent>]`,
+ 
+ 	Short: "Deploy OpenFaaS functions",
+ 	Long: `Deploys OpenFaaS function containers either via the supplied YAML config using
+@@ -260,6 +262,10 @@ Error: %s`, fprocessErr.Error())
+ 
+ 			function.Image = schema.BuildImageName(tagMode, function.Image, sha, branch)
+ 
++			//Check if there is a imagePullPolicy flag passed, if so, override the imagePullPolicy value
++			// defined in the stack.yaml
++			function.ImagePullPolicy = getImagePullPolicy(imagePullPolicy, function.ImagePullPolicy)	
++
+ 			if deployFlags.readOnlyRootFilesystem {
+ 				function.ReadOnlyRootFilesystem = deployFlags.readOnlyRootFilesystem
+ 			}
+@@ -268,6 +274,7 @@ Error: %s`, fprocessErr.Error())
+ 				FProcess:                function.FProcess,
+ 				FunctionName:            function.Name,
+ 				Image:                   function.Image,
++				ImagePullPolicy:         function.ImagePullPolicy,
+ 				Language:                function.Language,
+ 				Replace:                 deployFlags.replace,
+ 				EnvVars:                 allEnvironment,
+@@ -312,6 +319,7 @@ Error: %s`, fprocessErr.Error())
+ 		statusCode, err := deployImage(ctx,
+ 			proxyClient,
+ 			image,
++			imagePullPolicy,
+ 			fprocess,
+ 			functionName,
+ 			"",
+@@ -345,6 +353,7 @@ func deployImage(
+ 	ctx context.Context,
+ 	client *proxy.Client,
+ 	image string,
++	imagePullPolicy string,
+ 	fprocess string,
+ 	functionName string,
+ 	registryAuth string,
+@@ -382,6 +391,7 @@ func deployImage(
+ 		FProcess:                fprocess,
+ 		FunctionName:            functionName,
+ 		Image:                   image,
++		ImagePullPolicy:         imagePullPolicy,
+ 		Language:                language,
+ 		Replace:                 deployFlags.replace,
+ 		EnvVars:                 envvars,
+diff --git a/commands/faas.go b/commands/faas.go
+index c888b090..8fb74e3a 100644
+--- a/commands/faas.go
++++ b/commands/faas.go
+@@ -41,6 +41,7 @@ var (
+ 	image        string
+ 	imagePrefix  string
+ 	language     string
++	imagePullPolicy string
+ 	tlsInsecure  bool
+ )
+ 
+diff --git a/commands/priority.go b/commands/priority.go
+index 9c5664ae..7c443352 100644
+--- a/commands/priority.go
++++ b/commands/priority.go
+@@ -73,3 +73,11 @@ func getNamespace(flagNamespace, stackNamespace string) string {
+ 	return defaultFunctionNamespace
+ 
+ }
++
++func getImagePullPolicy(flagPullPolicy, stackPullPolicy string) string {
++	if len(flagPullPolicy) > 0 {
++		return flagPullPolicy
++	}
++
++	return stackPullPolicy
++}
+diff --git a/commands/store_deploy.go b/commands/store_deploy.go
+index 9e2581e6..c53cfe1c 100644
+--- a/commands/store_deploy.go
++++ b/commands/store_deploy.go
+@@ -142,6 +142,7 @@ func runStoreDeploy(cmd *cobra.Command, args []string) error {
+ 	statusCode, err := deployImage(context.Background(),
+ 		proxyClient,
+ 		imageName,
++		imagePullPolicy,
+ 		item.Fprocess,
+ 		itemName,
+ 		"",
+diff --git a/proxy/deploy.go b/proxy/deploy.go
+index 73988e13..810e91e4 100644
+--- a/proxy/deploy.go
++++ b/proxy/deploy.go
+@@ -33,6 +33,7 @@ type DeployFunctionSpec struct {
+ 	FProcess                string
+ 	FunctionName            string
+ 	Image                   string
++	ImagePullPolicy         string
+ 	RegistryAuth            string
+ 	Language                string
+ 	Replace                 bool
+@@ -94,6 +95,7 @@ func (c *Client) deploy(context context.Context, spec *DeployFunctionSpec, updat
+ 	req := types.FunctionDeployment{
+ 		EnvProcess:             fprocessTemplate,
+ 		Image:                  spec.Image,
++		ImagePullPolicy:        spec.ImagePullPolicy,
+ 		Service:                spec.FunctionName,
+ 		EnvVars:                spec.EnvVars,
+ 		Constraints:            spec.Constraints,
+diff --git a/proxy/deploy_test.go b/proxy/deploy_test.go
+index dfd6bd98..8a8092f0 100644
+--- a/proxy/deploy_test.go
++++ b/proxy/deploy_test.go
+@@ -39,6 +39,7 @@ func runDeployProxyTest(t *testing.T, deployTest deployProxyTest) {
+ 			"fprocess",
+ 			"function",
+ 			"image",
++			"imagePullPolicy",
+ 			"dXNlcjpwYXNzd29yZA==",
+ 			"language",
+ 			deployTest.replace,
+@@ -108,6 +109,7 @@ func Test_DeployFunction_generateFuncStr(t *testing.T) {
+ 				"fprocess",
+ 				"funcName",
+ 				"image",
++				"imagePullPolicy",
+ 				"dXNlcjpwYXNzd29yZA==",
+ 				"language",
+ 				false,
+@@ -131,6 +133,7 @@ func Test_DeployFunction_generateFuncStr(t *testing.T) {
+ 				"fprocess",
+ 				"funcName",
+ 				"image",
++				"imagePullPolicy",
+ 				"dXNlcjpwYXNzd29yZA==",
+ 				"language",
+ 				false,
+diff --git a/stack/schema.go b/stack/schema.go
+index fcaeca32..963b342e 100644
+--- a/stack/schema.go
++++ b/stack/schema.go
+@@ -22,6 +22,9 @@ type Function struct {
+ 	// Image Docker image name
+ 	Image string `yaml:"image"`
+ 
++	// ImagePullPolicy is the policy which controls if the container image
++	ImagePullPolicy string `yaml:"image_pull_policy,omitempty"`
++
+ 	FProcess string `yaml:"fprocess"`
+ 
+ 	Environment map[string]string `yaml:"environment"`
+diff --git a/vendor/github.com/openfaas/faas-provider/types/function_deployment.go b/vendor/github.com/openfaas/faas-provider/types/function_deployment.go
+index 22b2abde..a9f7aacd 100644
+--- a/vendor/github.com/openfaas/faas-provider/types/function_deployment.go
++++ b/vendor/github.com/openfaas/faas-provider/types/function_deployment.go
+@@ -9,6 +9,9 @@ type FunctionDeployment struct {
+ 	// Image is a fully-qualified container image
+ 	Image string `json:"image"`
+ 
++	// ImagePullPolicy is the policy which controls if the container image
++	ImagePullPolicy string `json:"imagePullPolicy,omitempty"`
++
+ 	// Namespace for the function, if supported by the faas-provider
+ 	Namespace string `json:"namespace,omitempty"`
